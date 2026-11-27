@@ -33,6 +33,7 @@ h2{font:600 26px/1.2 var(--display);letter-spacing:-.02em;margin:0 0 16px}
 .stat{background:var(--raised);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
 .stat .k{font-size:13px;color:var(--muted)}
 .stat .v{font:500 28px/1.2 var(--mono);margin-top:6px}
+.stat .n{font-size:12px;color:var(--muted);margin-top:4px}
 .sub{font-size:14px;color:var(--muted);margin:0 0 40px}
 .pos{color:var(--edge)}.neg{color:var(--loss)}
 section{margin:0 0 48px}
@@ -59,10 +60,19 @@ section{margin:0 0 48px}
 .body code{display:block;font-family:var(--mono);font-size:12px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:6px 0 10px;word-break:break-all;white-space:pre-wrap}
 .head{display:grid;grid-template-columns:56px minmax(0,1fr) 120px 72px 80px 96px 80px;gap:12px;padding:0 4px 8px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .more{margin-top:16px}
+.tests{width:100%;border-collapse:collapse;font-size:14px}
+.tests th,.tests td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.tests th:first-child,.tests td:first-child{text-align:left}
+.tests th{font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.tests-wrap{overflow-x:auto}
+.note{color:var(--muted);margin:12px 0 0;max-width:760px;font-size:14px}
 .how p{color:var(--muted);margin:0 0 12px;max-width:760px}
 footer{border-top:1px solid var(--line);padding:24px 0 48px;font-size:13px;color:var(--muted)}
 @media (max-width:760px){
  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .tests{font-size:13px}
+ .tests th,.tests td{padding:8px 5px;white-space:normal}
+ .tests .wide{display:none}
  .cols{grid-template-columns:minmax(0,1fr)}
  .head{display:none}
  .pick summary{grid-template-columns:44px minmax(0,1fr) auto;row-gap:4px}
@@ -99,6 +109,13 @@ footer{border-top:1px solid var(--line);padding:24px 0 48px;font-size:13px;color
   </section>
 
   <section>
+    <h2>Is the edge real? Two stricter tests</h2>
+    <div class="panel tests-wrap"><table class="tests" id="tests"></table></div>
+    <p class="note"><b style="color:var(--ink)">Won vs. fair odds</b> compares wins with what Pinnacle's no-vig price said each pick's chance was. A real edge wins at least that often; luck can't hide for long here. <b style="color:var(--ink)">Beat the close</b> only counts closing prices we actually re-checked before the game. Until Nov 17 many weren't, and they just repeated the price at posting, which made our old "beat the close" number look better than it was.</p>
+    <p class="note">What this shows so far: moneylines have won about as often as the odds said, and they've made money. Props haven't. They beat Pinnacle's closing price most of the time, but Pinnacle's prop prices often don't move at all, and props have won less often than its odds said. Since Nov 26, props also have to beat the betting exchanges' price before they're posted.</p>
+  </section>
+
+  <section>
     <h2>Bankroll challenges</h2>
     <div class="cols" id="accts"></div>
   </section>
@@ -119,7 +136,7 @@ footer{border-top:1px solid var(--line);padding:24px 0 48px;font-size:13px;color
     <h2>How to check it yourself</h2>
     <p>Each pick's fingerprint is the SHA-256 of the text shown when you open it. That text starts with the previous pick's fingerprint, so changing, removing or back-dating any pick breaks every fingerprint after it. Open a pick to see its text, or download <a href="record.json">record.json</a> and hash it with any tool.</p>
     <p><b style="color:var(--ink)">Sealed picks</b> are for games that haven't started. Only their fingerprint is shown until kickoff. It's published before the game, so it couldn't have been made after.</p>
-    <p>Results and closing line value are added after each game and aren't part of the fingerprint. They come from the final score and Pinnacle's last price before the game.</p>
+    <p>Results and closing line value are added after each game and aren't part of the fingerprint. They come from the final score and Pinnacle's last price before the game. A "–" in the CLV column means that pick's closing price wasn't re-checked before the game, so it isn't counted.</p>
   </section>
 </main>
 
@@ -191,7 +208,7 @@ footer{border-top:1px solid var(--line);padding:24px 0 48px;font-size:13px;color
       <span class="c-price mono">${esc(p.price)}</span>
       <span class="c-ev mono pos">${pct(p.ev)}</span>
       <span class="c-res mono">${res}</span>
-      <span class="c-clv mono ${cls(p.clv)}">${p.clv == null ? "" : pct(p.clv)}</span>
+      <span class="c-clv mono ${p.clv_measured ? cls(p.clv) : ""}" ${p.clv != null && !p.clv_measured ? 'title="Closing price not re-checked before the game, so not counted"' : ""}>${p.clv == null ? "" : p.clv_measured ? pct(p.clv) : "–"}</span>
     </summary><div class="body">
       Logged ${esc(day(p.created_at))}, game started ${esc(day(p.starts))} · fair ${(p.fair * 100).toFixed(1)}% · stake ${p.stake}u
       <br>Fingerprinted text<code>${esc(p.payload)}</code>Fingerprint (SHA-256 of the text above)<code>${esc(p.hash)}</code>
@@ -211,8 +228,14 @@ footer{border-top:1px solid var(--line);padding:24px 0 48px;font-size:13px;color
     const o = d.record, x = d.excluded || {n: 0};
     $("stats").innerHTML = [
       ["Record", `${o.wins}-${o.losses}`, ""], ["Units", units(o.units), cls(o.units)], ["ROI", pct(o.roi), cls(o.roi)],
-      ["Avg closing line value", pct(o.avg_clv), cls(o.avg_clv)], ["Beat the closing line", o.beat_close_pct == null ? "–" : Math.round(o.beat_close_pct * 100) + "%", ""],
-    ].map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`).join("");
+      ...(() => {
+        const hs = (d.honest && d.honest.groups) || [], all = hs.find((h) => h.name === "All picks"), ml = hs.find((h) => h.name === "Moneylines");
+        return [
+          ["Won vs. fair odds", all ? String(all.wins) : "–", "", all ? `odds expected ${Math.round(all.expected_wins)}` : ""],
+          ["Moneylines beat the close", ml && ml.beat_close_checked != null ? Math.round(ml.beat_close_checked * 100) + "%" : "–", "", ml ? `${ml.closes_checked} closes re-checked` : ""],
+        ];
+      })(),
+    ].map(([k, v, c, n]) => `<div class="stat"><div class="k">${k}</div><div class="v ${c}">${v}</div>${n ? `<div class="n">${n}</div>` : ""}</div>`).join("");
     const sports = (d.by_sport || []).filter((s) => s.settled || s.open).map((s) =>
       `${esc(s.sport)} ${s.wins}-${s.losses} <span class="mono ${cls(s.units)}">${units(s.units)}</span>`).join(" · ");
     const y = d.yesterday;
@@ -220,6 +243,11 @@ footer{border-top:1px solid var(--line);padding:24px 0 48px;font-size:13px;color
       `${o.logged} picks counted, ${o.open} still open.` + (sports ? ` By sport: ${sports}.` : "") +
       (x.n ? ` Not counted, by rule: ${x.duplicate ? x.duplicate + " duplicate picks from the Oct 27 bug" : ""}${x.duplicate && x.not_posted ? " and " : ""}${x.not_posted ? x.not_posted + " picks that never reached members (bet-link bug)" : ""} (${x.wins}-${x.losses}, <span class="mono ${cls(x.units)}">${units(x.units)}</span>). They're still in the chain below, marked.` : "");
     curve(d.curve);
+    const hs = (d.honest && d.honest.groups) || [];
+    $("tests").innerHTML = `<thead><tr><th>Bet type</th><th class="wide">Graded</th><th>Won</th><th>Odds expected</th><th class="wide">Units</th><th>Closes re-checked</th><th>Beat the close</th></tr></thead><tbody>` +
+      hs.map((h) => `<tr><td>${esc(h.name)}</td><td class="mono wide">${h.graded}</td><td class="mono">${h.wins}</td><td class="mono">${h.expected_wins.toFixed(1)}</td>
+        <td class="mono wide ${cls(h.units)}">${units(h.units)}</td><td class="mono">${h.closes_checked} <span class="wide">of ${h.closes}</span></td>
+        <td class="mono">${h.beat_close_checked == null ? "–" : Math.round(h.beat_close_checked * 100) + "%"}</td></tr>`).join("") + `</tbody>`;
     $("accts").innerHTML = d.challenges.map((a) => `<div class="panel acct"><div class="name">${esc(a.name)}</div>
       <div class="bal ${cls(a.growth)}">${money(a.final)}</div>
       <div class="meta">${esc(a.strategy_name)} · started ${money(a.start)} on ${esc(day(a.since))} · ${pct(a.growth)} · ${a.wins}-${a.losses}</div></div>`).join("");
